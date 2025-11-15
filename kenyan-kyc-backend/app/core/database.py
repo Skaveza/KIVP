@@ -2,7 +2,7 @@
 Database Connection and Session Management
 """
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 from typing import Generator
@@ -45,7 +45,7 @@ def check_db_connection() -> bool:
     """Check if database connection is working"""
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         return True
     except Exception as e:
         print(f"Database connection failed: {e}")

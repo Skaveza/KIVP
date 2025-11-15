@@ -2,10 +2,11 @@
 Pydantic Schemas for Request/Response Validation
 """
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
+from uuid import UUID as UUID_Type
 
 
 # User Schemas
@@ -34,6 +35,13 @@ class UserResponse(UserBase):
     created_at: datetime
     verification_date: Optional[datetime] = None
     
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID_Type):
+            return str(v)
+        return v
+    
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -59,6 +67,13 @@ class ReceiptResponse(BaseModel):
     uploaded_at: datetime
     error_message: Optional[str] = None
     
+    @field_validator('id', 'user_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID_Type):
+            return str(v)
+        return v
+    
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -77,6 +92,13 @@ class VerificationScoreResponse(BaseModel):
     unique_locations: int
     date_range_days: int
     calculated_at: datetime
+    
+    @field_validator('user_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID_Type):
+            return str(v)
+        return v
     
     model_config = ConfigDict(from_attributes=True)
 
