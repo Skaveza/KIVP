@@ -59,8 +59,8 @@ export default function Dashboard({ onLogout }) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold">Kenyan KYC Verification Platform</h1>
-              <p className="text-sm text-green-100">Receipt-Based Investor Verification</p>
+              <h1 className="text-2xl font-bold">Kazi KYC</h1>
+              <p className="text-sm text-green-100">Receipt-Based Verification • Global Market Access</p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
