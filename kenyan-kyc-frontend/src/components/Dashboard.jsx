@@ -3,12 +3,18 @@ import { getDashboard, getCurrentUser } from '../services/api';
 import ScoreGauge from './ScoreGauge';
 import ReceiptUpload from './ReceiptUpload';
 import ReceiptList from './ReceiptList';
+import ScoreBreakdown from './ScoreBreakdown';
+import InvestmentGoals from './InvestmentGoals';
+import SpendingCharts from './SpendingCharts';
+import VerificationProgress from './VerificationProgress';
+import BatchUpload from './BatchUpload';
 
 export default function Dashboard({ onLogout }) {
   const [user, setUser] = useState(null);
   const [score, setScore] = useState(null);
   const [stats, setStats] = useState({});
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeTab, setActiveTab] = useState('overview');
 
   const fetchData = async () => {
     try {
@@ -36,20 +42,38 @@ export default function Dashboard({ onLogout }) {
     setRefreshKey(prev => prev + 1);
   };
 
+  const tabs = [
+    { id: 'overview', name: 'Overview', icon: '📊' },
+    { id: 'upload', name: 'Upload Receipts', icon: '📤' },
+    { id: 'receipts', name: 'My Receipts', icon: '📄' },
+    { id: 'score', name: 'Score Details', icon: '🎯' },
+    { id: 'analytics', name: 'Analytics', icon: '📈' },
+    { id: 'investments', name: 'Investment Goals', icon: '💰' },
+    { id: 'progress', name: 'Verification', icon: '✅' }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-kenya-green text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">KYC Dashboard</h1>
-          <div className="flex items-center gap-4">
-            <span>{user?.full_name}</span>
-            <button
-              onClick={onLogout}
-              className="bg-white text-kenya-green px-4 py-2 rounded hover:bg-gray-100"
-            >
-              Logout
-            </button>
+      {/* Header with Kenyan Flag Colors */}
+      <header className="bg-gradient-to-r from-kenya-green via-kenya-black to-kenya-red text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">🇰🇪 Kenyan KYC Platform</h1>
+              <p className="text-sm text-green-100">Receipt-Based Investor Verification</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="font-semibold">{user?.full_name}</p>
+                <p className="text-xs text-green-100">{user?.email}</p>
+              </div>
+              <button
+                onClick={onLogout}
+                className="bg-white text-kenya-green px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -57,38 +81,179 @@ export default function Dashboard({ onLogout }) {
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-500 text-sm font-semibold">Total Receipts</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.total || 0}</p>
+          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-kenya-green">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-500 text-sm font-semibold">Total Receipts</h3>
+                <p className="text-3xl font-bold text-gray-800">{stats.total || 0}</p>
+              </div>
+              <div className="text-4xl">📄</div>
+            </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-500 text-sm font-semibold">Processed</h3>
-            <p className="text-3xl font-bold text-green-600">{stats.processed || 0}</p>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-500 text-sm font-semibold">Processed</h3>
+                <p className="text-3xl font-bold text-green-600">{stats.processed || 0}</p>
+              </div>
+              <div className="text-4xl">✅</div>
+            </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-500 text-sm font-semibold">Pending</h3>
-            <p className="text-3xl font-bold text-yellow-600">{stats.pending || 0}</p>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-yellow-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-500 text-sm font-semibold">Pending</h3>
+                <p className="text-3xl font-bold text-yellow-600">{stats.pending || 0}</p>
+              </div>
+              <div className="text-4xl">⏳</div>
+            </div>
           </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-gray-500 text-sm font-semibold">KYC Status</h3>
-            <p className="text-xl font-bold text-gray-800">{user?.kyc_status?.toUpperCase()}</p>
+          
+          <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-kenya-red">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-gray-500 text-sm font-semibold">KYC Status</h3>
+                <p className="text-xl font-bold text-gray-800">
+                  {user?.kyc_status?.toUpperCase() || 'PENDING'}
+                </p>
+              </div>
+              <div className="text-4xl">
+                {user?.kyc_status === 'verified' ? '🎉' : user?.kyc_status === 'under_review' ? '🔍' : '⏸️'}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Score and Upload */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div className="bg-white rounded-lg shadow-lg p-8 flex items-center justify-center">
-            <ScoreGauge 
-              score={score?.final_score || user?.kyc_score || 0} 
-              status={user?.kyc_status}
+        {/* Tabs Navigation */}
+        <div className="bg-white rounded-lg shadow-lg mb-8 overflow-hidden">
+          <div className="flex overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 min-w-fit px-6 py-4 font-semibold transition ${
+                  activeTab === tab.id
+                    ? 'bg-kenya-green text-white border-b-4 border-kenya-black'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-8">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* KYC Score Gauge */}
+                <div className="bg-white rounded-lg shadow-lg p-8">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <span>🎯</span>
+                    Your KYC Score
+                  </h2>
+                  <div className="flex items-center justify-center">
+                    <ScoreGauge 
+                      score={score?.final_score || user?.kyc_score || 0} 
+                      status={user?.kyc_status}
+                    />
+                  </div>
+                  <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-semibold">💡 Quick Tip:</span> Upload more receipts and maintain regular shopping activity to improve your score!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Upload */}
+                <ReceiptUpload onUploadSuccess={handleUploadSuccess} />
+              </div>
+
+              {/* Recent Activity Preview */}
+              <div className="bg-white rounded-lg shadow-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-gray-800">Recent Receipts</h2>
+                  <button
+                    onClick={() => setActiveTab('receipts')}
+                    className="text-kenya-green font-semibold hover:underline"
+                  >
+                    View All →
+                  </button>
+                </div>
+                <ReceiptList refreshTrigger={refreshKey} />
+              </div>
+            </>
+          )}
+
+          {/* Upload Tab */}
+          {activeTab === 'upload' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <ReceiptUpload onUploadSuccess={handleUploadSuccess} />
+              <BatchUpload onUploadComplete={handleUploadSuccess} />
+            </div>
+          )}
+
+          {/* Receipts Tab */}
+          {activeTab === 'receipts' && (
+            <ReceiptList refreshTrigger={refreshKey} />
+          )}
+
+          {/* Score Details Tab */}
+          {activeTab === 'score' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1">
+                <div className="bg-white rounded-lg shadow-lg p-8 sticky top-8">
+                  <h3 className="text-xl font-bold text-gray-800 mb-4">Your Score</h3>
+                  <ScoreGauge 
+                    score={score?.final_score || user?.kyc_score || 0} 
+                    status={user?.kyc_status}
+                  />
+                </div>
+              </div>
+              <div className="lg:col-span-2">
+                <ScoreBreakdown />
+              </div>
+            </div>
+          )}
+
+          {/* Analytics Tab */}
+          {activeTab === 'analytics' && (
+            <SpendingCharts />
+          )}
+
+          {/* Investment Goals Tab */}
+          {activeTab === 'investments' && (
+            <InvestmentGoals 
+              userScore={score?.final_score || user?.kyc_score || 0}
+              userSpending={score?.total_spending || 0}
+              userReceipts={stats.processed || 0}
             />
-          </div>
-          <ReceiptUpload onUploadSuccess={handleUploadSuccess} />
-        </div>
+          )}
 
-        {/* Receipt List */}
-        <ReceiptList refreshTrigger={refreshKey} />
+          {/* Verification Progress Tab */}
+          {activeTab === 'progress' && (
+            <VerificationProgress />
+          )}
+        </div>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-kenya-black text-white mt-16 py-8">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="text-sm">
+            🇰🇪 Kenyan KYC Verification Platform • Receipt-Based Investor Authentication
+          </p>
+          <p className="text-xs text-gray-400 mt-2">
+            Built for thesis demonstration • {new Date().getFullYear()}
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
