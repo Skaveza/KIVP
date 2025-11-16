@@ -24,7 +24,6 @@ export default function VerificationProgress() {
           id: 'account',
           title: 'Create Account',
           completed: true,
-          icon: '✓',
           color: 'green'
         },
         {
@@ -34,7 +33,6 @@ export default function VerificationProgress() {
           current: dashboard.total_receipts,
           target: 10,
           description: 'Upload at least 10 receipts for accurate scoring',
-          icon: dashboard.total_receipts >= 5 ? '✓' : '📄',
           color: dashboard.total_receipts >= 5 ? 'green' : 'yellow'
         },
         {
@@ -44,27 +42,24 @@ export default function VerificationProgress() {
           current: dashboard.processed_receipts,
           target: 10,
           description: 'Process your uploaded receipts to extract data',
-          icon: dashboard.processed_receipts >= 5 ? '✓' : '⚙️',
           color: dashboard.processed_receipts >= 5 ? 'green' : 'yellow'
         },
         {
           id: 'spending',
-          title: 'Spending History',
+          title: 'Transaction History',
           completed: score ? parseFloat(score.total_spending) >= 25000 : false,
           current: score ? parseFloat(score.total_spending) : 0,
           target: 50000,
-          description: 'Build a spending history of at least KES 50,000',
-          icon: score && parseFloat(score.total_spending) >= 25000 ? '✓' : '💰',
+          description: 'Build a transaction history of at least KES 50,000',
           color: score && parseFloat(score.total_spending) >= 25000 ? 'green' : 'yellow'
         },
         {
           id: 'diversity',
-          title: 'Shopping Diversity',
+          title: 'Transaction Diversity',
           completed: score ? score.unique_companies >= 3 : false,
           current: score ? score.unique_companies : 0,
           target: 5,
-          description: 'Shop at different stores to show diverse activity',
-          icon: score && score.unique_companies >= 3 ? '✓' : '🏪',
+          description: 'Receipts from different merchants show varied activity',
           color: score && score.unique_companies >= 3 ? 'green' : 'yellow'
         },
         {
@@ -74,7 +69,6 @@ export default function VerificationProgress() {
           current: score ? score.date_range_days : 0,
           target: 60,
           description: 'Upload receipts regularly over 60+ days',
-          icon: score && score.date_range_days >= 30 ? '✓' : '📅',
           color: score && score.date_range_days >= 30 ? 'green' : 'yellow'
         },
         {
@@ -82,7 +76,6 @@ export default function VerificationProgress() {
           title: 'Get Verified',
           completed: score ? score.is_verified : false,
           description: 'Achieve a KYC score of 75 or higher',
-          icon: score?.is_verified ? '✓' : '🎯',
           color: score?.is_verified ? 'green' : 'red'
         }
       ];
@@ -137,7 +130,13 @@ export default function VerificationProgress() {
             }`}
           >
             <div className="flex items-start gap-3">
-              <span className="text-2xl">{item.icon}</span>
+              {/* Status Indicator (no emojis) */}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                item.completed ? 'bg-green-500' : 'bg-gray-300'
+              }`}>
+                {item.completed && <span className="text-white text-sm font-bold">✓</span>}
+              </div>
+              
               <div className="flex-1">
                 <div className="flex items-start justify-between">
                   <div>
@@ -179,12 +178,12 @@ export default function VerificationProgress() {
 
       {progress.score && !progress.score.is_verified && (
         <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
-          <h4 className="font-semibold text-blue-800 mb-2">💡 What's Next?</h4>
+          <h4 className="font-semibold text-blue-800 mb-2">What's Next?</h4>
           <p className="text-sm text-blue-700">
             {progress.score.final_score >= 60 ? (
-              <>You're close! Upload more receipts and maintain consistent shopping activity to reach 75 points.</>
+              <>You're close! Upload more receipts to reach the 75-point verification threshold.</>
             ) : (
-              <>Keep uploading receipts regularly. Aim for at least 10 receipts from 3+ different stores over 30+ days.</>
+              <>Continue uploading receipts regularly. Aim for at least 10 receipts from 3+ different stores over 30+ days.</>
             )}
           </p>
         </div>
@@ -192,7 +191,7 @@ export default function VerificationProgress() {
 
       {progress.score?.is_verified && (
         <div className="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded">
-          <h4 className="font-semibold text-green-800 mb-2">🎉 Congratulations!</h4>
+          <h4 className="font-semibold text-green-800 mb-2">Congratulations!</h4>
           <p className="text-sm text-green-700">
             You're verified! You can now access investment platforms and opportunities.
           </p>

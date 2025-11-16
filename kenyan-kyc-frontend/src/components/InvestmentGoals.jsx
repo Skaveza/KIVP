@@ -4,7 +4,6 @@ const INVESTMENT_OPTIONS = [
   {
     id: 'startup',
     name: 'Kenyan Startups',
-    icon: '🚀',
     minScore: 70,
     minAmount: 50000,
     description: 'Invest in innovative Kenyan tech startups',
@@ -13,7 +12,6 @@ const INVESTMENT_OPTIONS = [
   {
     id: 'real-estate',
     name: 'Real Estate Projects',
-    icon: '🏢',
     minScore: 75,
     minAmount: 100000,
     description: 'Real estate investment opportunities',
@@ -22,7 +20,6 @@ const INVESTMENT_OPTIONS = [
   {
     id: 'stocks',
     name: 'NSE Stock Market',
-    icon: '📈',
     minScore: 65,
     minAmount: 25000,
     description: 'Invest in Nairobi Securities Exchange',
@@ -31,7 +28,6 @@ const INVESTMENT_OPTIONS = [
   {
     id: 'bonds',
     name: 'Government Bonds',
-    icon: '🏛️',
     minScore: 80,
     minAmount: 150000,
     description: 'Safe government treasury bonds',
