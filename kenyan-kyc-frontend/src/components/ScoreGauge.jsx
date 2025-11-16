@@ -1,5 +1,6 @@
 export default function ScoreGauge({ score, status }) {
-  const percentage = score || 0;
+  // Convert score to number, default to 0
+  const percentage = Number(score) || 0;
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
