@@ -43,13 +43,13 @@ export default function Dashboard({ onLogout }) {
   };
 
   const tabs = [
-    { id: 'overview', name: 'Overview', icon: '📊' },
-    { id: 'upload', name: 'Upload Receipts', icon: '📤' },
-    { id: 'receipts', name: 'My Receipts', icon: '📄' },
-    { id: 'score', name: 'Score Details', icon: '🎯' },
-    { id: 'analytics', name: 'Analytics', icon: '📈' },
-    { id: 'investments', name: 'Investment Goals', icon: '💰' },
-    { id: 'progress', name: 'Verification', icon: '✅' }
+    { id: 'overview', name: 'Overview' },
+    { id: 'upload', name: 'Upload Receipts' },
+    { id: 'receipts', name: 'My Receipts' },
+    { id: 'score', name: 'Score Details' },
+    { id: 'analytics', name: 'Analytics' },
+    { id: 'investments', name: 'Investment Goals' },
+    { id: 'progress', name: 'Verification' }
   ];
 
   return (
@@ -59,7 +59,7 @@ export default function Dashboard({ onLogout }) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold">🇰🇪 Kenyan KYC Platform</h1>
+              <h1 className="text-2xl font-bold">Kenyan KYC Verification Platform</h1>
               <p className="text-sm text-green-100">Receipt-Based Investor Verification</p>
             </div>
             <div className="flex items-center gap-4">
@@ -82,47 +82,29 @@ export default function Dashboard({ onLogout }) {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-kenya-green">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-500 text-sm font-semibold">Total Receipts</h3>
-                <p className="text-3xl font-bold text-gray-800">{stats.total || 0}</p>
-              </div>
-              <div className="text-4xl">📄</div>
-            </div>
+            <h3 className="text-gray-500 text-sm font-semibold">Total Receipts</h3>
+            <p className="text-3xl font-bold text-gray-800">{stats.total || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Uploaded receipts</p>
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-500 text-sm font-semibold">Processed</h3>
-                <p className="text-3xl font-bold text-green-600">{stats.processed || 0}</p>
-              </div>
-              <div className="text-4xl">✅</div>
-            </div>
+            <h3 className="text-gray-500 text-sm font-semibold">Processed</h3>
+            <p className="text-3xl font-bold text-green-600">{stats.processed || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Data extracted</p>
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-yellow-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-500 text-sm font-semibold">Pending</h3>
-                <p className="text-3xl font-bold text-yellow-600">{stats.pending || 0}</p>
-              </div>
-              <div className="text-4xl">⏳</div>
-            </div>
+            <h3 className="text-gray-500 text-sm font-semibold">Pending</h3>
+            <p className="text-3xl font-bold text-yellow-600">{stats.pending || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Awaiting processing</p>
           </div>
           
           <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-kenya-red">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-500 text-sm font-semibold">KYC Status</h3>
-                <p className="text-xl font-bold text-gray-800">
-                  {user?.kyc_status?.toUpperCase() || 'PENDING'}
-                </p>
-              </div>
-              <div className="text-4xl">
-                {user?.kyc_status === 'verified' ? '🎉' : user?.kyc_status === 'under_review' ? '🔍' : '⏸️'}
-              </div>
-            </div>
+            <h3 className="text-gray-500 text-sm font-semibold">KYC Status</h3>
+            <p className="text-xl font-bold text-gray-800">
+              {user?.kyc_status?.toUpperCase() || 'PENDING'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Verification status</p>
           </div>
         </div>
 
@@ -139,7 +121,6 @@ export default function Dashboard({ onLogout }) {
                     : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
                 {tab.name}
               </button>
             ))}
@@ -154,10 +135,7 @@ export default function Dashboard({ onLogout }) {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* KYC Score Gauge */}
                 <div className="bg-white rounded-lg shadow-lg p-8">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                    <span>🎯</span>
-                    Your KYC Score
-                  </h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-6">Your KYC Score</h2>
                   <div className="flex items-center justify-center">
                     <ScoreGauge 
                       score={score?.final_score || user?.kyc_score || 0} 
@@ -166,7 +144,7 @@ export default function Dashboard({ onLogout }) {
                   </div>
                   <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
                     <p className="text-sm text-gray-700">
-                      <span className="font-semibold">💡 Quick Tip:</span> Upload more receipts and maintain regular shopping activity to improve your score!
+                      <span className="font-semibold">Tip:</span> Upload your everyday transaction receipts to build your verification score and establish your financial history.
                     </p>
                   </div>
                 </div>
@@ -246,11 +224,9 @@ export default function Dashboard({ onLogout }) {
       {/* Footer */}
       <footer className="bg-kenya-black text-white mt-16 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-sm">
-            🇰🇪 Kenyan KYC Verification Platform • Receipt-Based Investor Authentication
-          </p>
+          <p className="text-sm">Kenyan KYC Verification Platform • Receipt-Based Investor Authentication</p>
           <p className="text-xs text-gray-400 mt-2">
-            Built for thesis demonstration • {new Date().getFullYear()}
+            Thesis Demonstration • {new Date().getFullYear()}
           </p>
         </div>
       </footer>
