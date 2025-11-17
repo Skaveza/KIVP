@@ -18,7 +18,10 @@ app = FastAPI(
     description="Receipt-based KYC verification",
     docs_url="/docs"
 )
-
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:5173"],

@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: kyc-verification-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: False
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: PROJECT_NAME
+        value: Kenyan KYC Verification Platform
+      - key: VERSION
+        value: 1.0.0
+      - key: DESCRIPTION
+        value: Receipt-based KYC verification for Kenyan investors
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: MAX_FILE_SIZE
+        value: 5242880
+      - key: ALLOWED_EXTENSIONS
+        value: jpg,jpeg,png,pdf
+      - key: WEIGHT_DOCUMENT_QUALITY
+        value: 0.30
+      - key: WEIGHT_SPENDING_PATTERN
+        value: 0.25
+      - key: WEIGHT_CONSISTENCY
+        value: 0.25
+      - key: WEIGHT_DIVERSITY
+        value: 0.20
+      - key: VERIFICATION_THRESHOLD
+        value: 75.00
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MODEL_PATH
+        value: ./models/donut_model
+      - key: MODEL_DEVICE
+        value: cpu
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+    disk:
+      name: uploads-disk
+      mountPath: /var/data
+      sizeGB: 1
+
+databases:
+  - name: kyc-verification-db
+    databaseName: kyc_verification_db
+    user: kyc_user
+    plan: free
