@@ -86,11 +86,6 @@ class VerificationScore(Base):
     diversity_score = Column(Numeric(5, 2), default=0.00)
     final_score = Column(Numeric(5, 2), default=0.00, index=True)
     
-    weight_document_quality = Column(Numeric(3, 2), default=0.30)
-    weight_spending_pattern = Column(Numeric(3, 2), default=0.25)
-    weight_consistency = Column(Numeric(3, 2), default=0.25)
-    weight_diversity = Column(Numeric(3, 2), default=0.20)
-    
     is_verified = Column(Boolean, default=False)
     verification_threshold = Column(Numeric(5, 2), default=75.00)
     

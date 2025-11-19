@@ -9,7 +9,9 @@ from decimal import Decimal
 from uuid import UUID as UUID_Type
 
 
+# -----------------------------
 # User Schemas
+# -----------------------------
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str
@@ -34,14 +36,11 @@ class UserResponse(UserBase):
     is_active: bool
     created_at: datetime
     verification_date: Optional[datetime] = None
-    
+
     @field_validator('id', mode='before')
-    @classmethod
     def convert_uuid_to_str(cls, v):
-        if isinstance(v, UUID_Type):
-            return str(v)
-        return v
-    
+        return str(v) if isinstance(v, UUID_Type) else v
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -51,7 +50,9 @@ class UserUpdate(BaseModel):
     national_id: Optional[str] = None
 
 
+# -----------------------------
 # Receipt Schemas
+# -----------------------------
 class ReceiptResponse(BaseModel):
     id: str
     user_id: str
@@ -64,20 +65,20 @@ class ReceiptResponse(BaseModel):
     total_amount: Optional[Decimal] = None
     currency: str = 'KES'
     overall_confidence: Optional[Decimal] = None
+    accuracy: Optional[float] = None  # <-- ADDED
     uploaded_at: datetime
     error_message: Optional[str] = None
-    
+
     @field_validator('id', 'user_id', mode='before')
-    @classmethod
     def convert_uuid_to_str(cls, v):
-        if isinstance(v, UUID_Type):
-            return str(v)
-        return v
-    
+        return str(v) if isinstance(v, UUID_Type) else v
+
     model_config = ConfigDict(from_attributes=True)
 
 
+# -----------------------------
 # Verification Score Schemas
+# -----------------------------
 class VerificationScoreResponse(BaseModel):
     user_id: str
     document_quality_score: Decimal
@@ -92,18 +93,19 @@ class VerificationScoreResponse(BaseModel):
     unique_locations: int
     date_range_days: int
     calculated_at: datetime
-    
+    average_transaction_amount: Decimal
+    model_accuracy: Optional[float] = None  # <-- ADDED
+
     @field_validator('user_id', mode='before')
-    @classmethod
     def convert_uuid_to_str(cls, v):
-        if isinstance(v, UUID_Type):
-            return str(v)
-        return v
-    
+        return str(v) if isinstance(v, UUID_Type) else v
+
     model_config = ConfigDict(from_attributes=True)
 
 
-# Dashboard Schemas
+# -----------------------------
+# Dashboard Schema
+# -----------------------------
 class UserDashboard(BaseModel):
     user: UserResponse
     verification_score: Optional[VerificationScoreResponse] = None
@@ -113,6 +115,9 @@ class UserDashboard(BaseModel):
     pending_receipts: int
 
 
+# -----------------------------
+# Admin Statistics Schema
+# -----------------------------
 class AdminStatistics(BaseModel):
     total_users: int
     verified_users: int
@@ -125,7 +130,9 @@ class AdminStatistics(BaseModel):
     average_kyc_score: Decimal
 
 
+# -----------------------------
 # Authentication Schemas
+# -----------------------------
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -137,7 +144,9 @@ class TokenData(BaseModel):
     account_type: str
 
 
-# Generic Response Schemas
+# -----------------------------
+# Generic
+# -----------------------------
 class MessageResponse(BaseModel):
     message: str
     success: bool = True

@@ -32,11 +32,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("🚀 Starting application...")
+    logger.info(" Starting application...")
     if check_db_connection():
-        logger.info("✅ Database connected")
+        logger.info(" Database connected")
     else:
-        logger.error("❌ Database failed!")
+        logger.error(" Database failed!")
 
 @app.get("/")
 def root():

@@ -1,226 +1,129 @@
-"""
-Receipt Management API Routes
-"""
+# app/api/routes/receipts.py  (or app/routes/receipts.py)
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.orm import Session
-from typing import List
 from datetime import datetime
+import os
+import shutil
+from uuid import uuid4
+
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.models import User, Receipt
-from app.schemas.schemas import ReceiptResponse, MessageResponse
+from app.schemas import ReceiptResponse
 from app.api.dependencies import get_current_user
-from app.utils.file_utils import save_upload_file, delete_file
+from app.services.ml_service import ml_service
 from app.services.kyc_scoring import KYCScorer
 
 router = APIRouter(prefix="/receipts", tags=["Receipts"])
 
+# ./uploads/receipts (from your .env UPLOAD_DIR)
+UPLOAD_DIR = os.path.join(settings.UPLOAD_DIR, "receipts")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.post("/upload", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
-async def upload_receipt(
-    file: UploadFile = File(...),
+
+@router.get("", response_model=list[ReceiptResponse])
+def list_receipts(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
 ):
-    """Upload a receipt image for processing"""
-    
-    # Save uploaded file
-    original_filename, file_path, file_size = await save_upload_file(file, str(current_user.id))
-    
-    # Create receipt record
-    new_receipt = Receipt(
-        user_id=current_user.id,
-        file_name=original_filename,
-        file_path=file_path,
-        file_size=file_size,
-        file_type=file.content_type,
-        status='pending'
-    )
-    
-    db.add(new_receipt)
-    db.commit()
-    db.refresh(new_receipt)
-    
-    return new_receipt
-
-
-@router.get("/", response_model=List[ReceiptResponse])
-def get_receipts(
-    skip: int = 0,
-    limit: int = 50,
-    status_filter: str = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get all receipts for current user"""
-    
-    query = db.query(Receipt).filter(Receipt.user_id == current_user.id)
-    
-    if status_filter:
-        query = query.filter(Receipt.status == status_filter)
-    
+    """
+    List the current user's receipts (most recent first).
+    Used by:
+      - ReceiptList
+      - SpendingCharts
+    """
     receipts = (
-        query
+        db.query(Receipt)
+        .filter(Receipt.user_id == current_user.id)
         .order_by(Receipt.uploaded_at.desc())
-        .offset(skip)
-        .limit(limit)
+        .limit(50)
         .all()
     )
-    
     return receipts
 
 
-@router.get("/{receipt_id}", response_model=ReceiptResponse)
-def get_receipt(
-    receipt_id: str,
+@router.post("/upload", response_model=ReceiptResponse)
+async def upload_receipt(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get detailed information about a specific receipt"""
-    
-    receipt = (
-        db.query(Receipt)
-        .filter(
-            Receipt.id == receipt_id,
-            Receipt.user_id == current_user.id
-        )
-        .first()
-    )
-    
-    if not receipt:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Receipt not found"
-        )
-    
-    return receipt
-
-
-@router.delete("/{receipt_id}", response_model=MessageResponse)
-def delete_receipt(
-    receipt_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Delete a receipt"""
-    
-    receipt = (
-        db.query(Receipt)
-        .filter(
-            Receipt.id == receipt_id,
-            Receipt.user_id == current_user.id
-        )
-        .first()
-    )
-    
-    if not receipt:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Receipt not found"
-        )
-    
-    # Delete file from storage
-    delete_file(receipt.file_path)
-    
-    # Delete from database
-    db.delete(receipt)
-    db.commit()
-    
-    # Recalculate KYC score
-    scorer = KYCScorer(db)
-    scorer.calculate_user_score(str(current_user.id))
-    
-    return {"message": "Receipt deleted successfully", "success": True}
-
-
-@router.post("/{receipt_id}/process", response_model=ReceiptResponse)
-def process_receipt(
-    receipt_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
 ):
     """
-    Manually trigger processing for a receipt (DEMO MODE).
-    Uses mock data - replace with your ML model.
+    Upload receipt → run OCR/ML → save result → return parsed structured fields.
+    Also triggers KYC scoring for the current user.
     """
-    
-    receipt = (
-        db.query(Receipt)
-        .filter(
-            Receipt.id == receipt_id,
-            Receipt.user_id == current_user.id
-        )
-        .first()
-    )
-    
-    if not receipt:
+
+    if not file:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Receipt not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file uploaded",
         )
-    
-    if receipt.status == 'completed':
-        return receipt
-    
-    # Update status to processing
-    receipt.status = 'processing'
-    receipt.processing_started_at = datetime.utcnow()
-    db.commit()
-    
-    # TODO: Call your ML model here
-    # For demo, use mock data:
-    from decimal import Decimal
-    from datetime import date
-    
-    receipt.status = 'completed'
-    receipt.company_name = 'Naivas Supermarket'
-    receipt.receipt_date = date.today()
-    receipt.receipt_address = 'Nairobi, Kenya'
-    receipt.total_amount = Decimal('2500.00')
-    receipt.currency = 'KES'
-    receipt.confidence_company = Decimal('0.95')
-    receipt.confidence_date = Decimal('0.92')
-    receipt.confidence_address = Decimal('0.88')
-    receipt.confidence_total = Decimal('0.97')
-    receipt.overall_confidence = Decimal('0.93')
-    receipt.raw_extraction_json = {
-        "company": "Naivas Supermarket",
-        "date": str(date.today()),
-        "address": "Nairobi, Kenya",
-        "total": "2500.00"
-    }
-    receipt.processing_completed_at = datetime.utcnow()
-    
+
+    # Generate unique filename
+    receipt_id = uuid4()
+    original_name = file.filename or "receipt"
+    _, ext = os.path.splitext(original_name)
+    safe_name = f"{receipt_id}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+
+    # Save file to disk
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Create DB entry in 'processing' state
+    receipt = Receipt(
+        id=receipt_id,              # UUID object, fine for Postgres UUID
+        user_id=current_user.id,    # ✅ from JWT
+        file_name=original_name,
+        file_path=file_path,
+        status="processing",
+        uploaded_at=datetime.utcnow(),
+    )
+
+    db.add(receipt)
     db.commit()
     db.refresh(receipt)
-    
-    # Recalculate KYC score
-    scorer = KYCScorer(db)
-    scorer.calculate_user_score(str(current_user.id))
-    
+
+    # Run ML
+    try:
+        parsed = ml_service.run_inference(file_path) or {}
+
+        receipt.company_name = parsed.get("company_name")
+        receipt.receipt_date = parsed.get("receipt_date")
+        receipt.receipt_address = parsed.get("receipt_address")
+        receipt.total_amount = parsed.get("total_amount")
+        receipt.currency = parsed.get("currency", "KES")
+
+        confidence = parsed.get("confidence") or 0.0
+        receipt.overall_confidence = confidence
+        receipt.confidence_company = confidence
+        receipt.confidence_date = confidence
+        receipt.confidence_address = confidence
+        receipt.confidence_total = confidence
+
+        if hasattr(receipt, "raw_extraction_json"):
+            receipt.raw_extraction_json = parsed
+
+        receipt.status = "completed"
+        if hasattr(receipt, "processing_completed_at"):
+            receipt.processing_completed_at = datetime.utcnow()
+
+    except Exception as e:
+        receipt.status = "failed"
+        receipt.error_message = str(e)
+
+    db.commit()
+    db.refresh(receipt)
+
+    # 🔁 Recalculate KYC score for this user after each (successful) upload
+    try:
+        scorer = KYCScorer(db)
+        scorer.calculate_user_score(str(current_user.id))
+        db.commit()  # harmless even if KYCScorer already committed internally
+    except Exception as e:
+        # Don't break the upload if scoring fails – just log it in dev
+        print("Error recalculating KYC score:", e)
+
     return receipt
-
-
-@router.get("/stats/summary")
-def get_receipt_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get summary statistics about user's receipts"""
-    from sqlalchemy import func
-    
-    stats = db.query(
-        func.count(Receipt.id).label('total'),
-        func.count(Receipt.id).filter(Receipt.status == 'completed').label('completed'),
-        func.count(Receipt.id).filter(Receipt.status == 'pending').label('pending'),
-        func.count(Receipt.id).filter(Receipt.status == 'failed').label('failed'),
-        func.sum(Receipt.total_amount).filter(Receipt.status == 'completed').label('total_spending')
-    ).filter(Receipt.user_id == current_user.id).first()
-    
-    return {
-        "total_receipts": stats.total or 0,
-        "completed_receipts": stats.completed or 0,
-        "pending_receipts": stats.pending or 0,
-        "failed_receipts": stats.failed or 0,
-        "total_spending": float(stats.total_spending or 0)
-    }
