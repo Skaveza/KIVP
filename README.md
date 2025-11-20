@@ -1,4 +1,5 @@
 # Kenyan KYC Verification Platform (Uwezo Prototype)
+[Demo Video]{https://youtu.be/wmPyv_Fk1E8}
 
 This project is a **receipt-based KYC verification platform** for Kenyan investors.  
 Users upload shopping/payment receipts, which are processed by a fine-tuned **LayoutLMv3** model to extract:
