@@ -1,5 +1,3 @@
-# app/services/kyc_scoring.py
-
 from decimal import Decimal
 from datetime import datetime
 import logging
@@ -10,7 +8,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ---- Global KYC thresholds (with safe defaults) ----
+# Global KYC thresholds 
 MIN_RECEIPT_CONFIDENCE = Decimal(
     str(getattr(settings, "MIN_RECEIPT_CONFIDENCE", 0.95))
 )
@@ -26,9 +24,8 @@ class KYCScorer:
     def __init__(self, db: Session):
         self.db = db
 
-    # -------------------------------------------------
+
     # Partition receipts: trusted vs dropped
-    # -------------------------------------------------
     def partition_receipts_for_user(self, user_id: str):
         """Return (trusted_receipts, dropped_receipts_with_reasons)."""
 
@@ -48,6 +45,13 @@ class KYCScorer:
 
         for r in all_receipts:
             reasons = []
+
+            # 0) Missing or placeholder company name
+            if not r.company_name or str(r.company_name).strip().lower() in (
+                "unknown",
+                "n/a",
+            ):
+                reasons.append("missing_company_name")
 
             # 1) Confidence filter
             conf = Decimal(str(r.overall_confidence or 0.0))
@@ -79,7 +83,10 @@ class KYCScorer:
         )
         for r, reason in dropped:
             logger.info(
-                f"KYCScorer: dropping receipt id={r.id} file={r.file_name} reason={reason}"
+                "KYCScorer: dropping receipt id=%s file=%s reason=%s",
+                r.id,
+                r.file_name,
+                reason,
             )
 
         return trusted, dropped
@@ -110,8 +117,8 @@ class KYCScorer:
             score = self._create_or_update_score(user_id, zero_data)
             self._update_user_kyc_status(user_id, score.final_score, score.is_verified)
             logger.info(
-                f"KYCScorer.calculate_user_score user={user_id}: "
-                f"no trusted receipts → score=0"
+                "KYCScorer.calculate_user_score user=%s: no trusted receipts → score=0",
+                user_id,
             )
             return score
 
@@ -167,9 +174,13 @@ class KYCScorer:
         self._update_user_kyc_status(user_id, final_score, is_verified)
 
         logger.info(
-            f"KYCScorer.calculate_user_score user={user_id}: "
-            f"final_score={final_score}, verified={is_verified}, "
-            f"trusted_receipts={len(receipts)}, dropped_receipts={len(dropped)}"
+            "KYCScorer.calculate_user_score user=%s: final_score=%s, verified=%s, "
+            "trusted_receipts=%d, dropped_receipts=%d",
+            user_id,
+            final_score,
+            is_verified,
+            len(receipts),
+            len(dropped),
         )
         return score
 
