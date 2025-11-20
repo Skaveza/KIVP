@@ -91,3 +91,41 @@ app/
 models/
   layoutlmv3_receipt_model/
     checkpoint-1000/   # fine-tuned LayoutLMv3 weights & tokenizer (local)
+```
+## Setup & Local Development
+
+### 1. Prerequisites
+
+- Python **3.11**
+- PostgreSQL (local or remote)
+- Tesseract OCR installed on your machine  
+  - macOS (Homebrew):
+    ```bash
+    brew install tesseract
+    ```
+- (Optional) `virtualenv` or `pyenv`
+
+---
+
+### 2. Clone the repository
+
+```bash
+git clone <your-repo-url>.git
+cd kenyan-kyc-backend
+```
+
+### 3. Create and activate virtual environment
+```bash
+python3.11 -m venv venv
+source venv/bin/activate   # macOS/Linux
+# .\venv\Scripts\activate  # Windows (PowerShell)
+
+```
+### 4. Install dependencies
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+
