@@ -128,4 +128,22 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+Make sure `requirements.txt` includes (at minimum):
+
+```text
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+transformers
+torch
+pillow
+pytesseract
+```
+
 
