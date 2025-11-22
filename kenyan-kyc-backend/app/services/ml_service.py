@@ -1,4 +1,5 @@
 import re
+import os 
 from datetime import datetime
 from typing import Dict
 
@@ -15,8 +16,9 @@ class KYCModelService:
     """
 
     def __init__(self):
-        self.model_path = settings.MODEL_PATH
-        self.device = torch.device(settings.MODEL_DEVICE)
+        self.model_path = os.path.abspath(os.getenv("MODEL_PATH", "app/models/layoutlmv3_receipt_model/checkpoint-1000"))
+        self.device = torch.device(os.getenv("MODEL_DEVICE", "cpu"))
+
 
         # Load processor (image processor + tokenizer)
         self.processor = AutoProcessor.from_pretrained(

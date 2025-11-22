@@ -1,6 +1,7 @@
 import os
 import shutil
 from uuid import uuid4, UUID
+from fastapi import Security
 from datetime import datetime, date
 from decimal import Decimal
 import logging
@@ -195,7 +196,7 @@ async def upload_receipt(
 def get_receipt_file(
     receipt_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Security(get_current_user),
 ):
     """
     Return the raw receipt file for viewing/downloading.

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     MAX_SINGLE_RECEIPT_KES: float = 200_000.0  
 
     # ML model config 
-    MODEL_PATH: str = "/Volumes/Peach/layoutlmv3_receipt_model/checkpoint-1000"
+    MODEL_PATH: str = "app/models/layoutlmv3_receipt_model/checkpoint-1000"
     MODEL_DEVICE: str = "cpu"
     MODEL_TYPE: str = "layoutlmv3"
 
