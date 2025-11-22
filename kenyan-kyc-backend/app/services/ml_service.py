@@ -1,94 +1,35 @@
 import re
 import os
 import logging
+import threading
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional
-from functools import lru_cache
 
 import torch
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 from transformers import AutoProcessor, AutoModelForTokenClassification
+from huggingface_hub import snapshot_download
+
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
-
-
-def _resolve_default_model_path() -> str:
-    """
-    Pick a default path that works in both:
-    - local dev repo (./app/models/...)
-    - docker runtime (/app/models/...)
-    """
-    candidates = [
-        os.path.abspath("app/models/layoutlmv3_receipt_model/checkpoint-1000"),
-        "/app/models/layoutlmv3_receipt_model/checkpoint-1000",
-    ]
-    for p in candidates:
-        if os.path.isdir(p):
-            return p
-    # fallback to first candidate even if missing (we'll error later with a clear msg)
-    return candidates[0]
+_init_lock = threading.Lock()
 
 
 class KYCModelService:
     """
-    Service for running LayoutLMv3-based KYC receipt extraction.
-    Lazily loaded via get_ml_service() to avoid startup crashes in Docker/Render.
+    Production-safe LayoutLMv3 receipt extraction:
+    - Lazy loads model on first use (better for Render/Oracle)
+    - Can optionally download model if missing
     """
 
-    def __init__(
-        self,
-        model_path: Optional[str] = None,
-        device: Optional[str] = None,
-        local_files_only: Optional[bool] = None,
-    ):
-        env_model_path = model_path or os.getenv("MODEL_PATH")
-        if env_model_path:
-            self.model_path = os.path.abspath(env_model_path)
-        else:
-            self.model_path = _resolve_default_model_path()
-
-        env_device = device or os.getenv("MODEL_DEVICE", "cpu")
-        self.device = torch.device(env_device)
-
-        # default True to preserve your current behavior
-        if local_files_only is None:
-            self.local_files_only = (
-                os.getenv("LOCAL_FILES_ONLY", "true").lower() == "true"
-            )
-        else:
-            self.local_files_only = bool(local_files_only)
-
-        self._load_model()
-
-    def _load_model(self):
-        if not os.path.isdir(self.model_path):
-            raise RuntimeError(
-                f"Model path not found: {self.model_path}. "
-                f"Make sure MODEL_PATH is set and the model is downloaded/mounted "
-                f"before running inference."
-            )
-
-        logger.info("Loading KYC model from %s on device %s", self.model_path, self.device)
-
-        # Load processor (image processor + tokenizer)
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_path,
-            local_files_only=self.local_files_only,
-        )
-
-        # Ensure OCR is enabled so features["words"] exists
-        if hasattr(self.processor, "image_processor") and hasattr(
-            self.processor.image_processor, "apply_ocr"
-        ):
-            self.processor.image_processor.apply_ocr = True
-
-        # Load model
-        self.model = AutoModelForTokenClassification.from_pretrained(
-            self.model_path,
-            local_files_only=self.local_files_only,
-        ).to(self.device)
-
-        self.model.eval()
+    def __init__(self):
+        self._loaded = False
+        self.model_path: Optional[Path] = None
+        self.device: Optional[torch.device] = None
+        self.processor = None
+        self.model = None
 
         # Label mappings
         self.label_list = [
@@ -101,7 +42,120 @@ class KYCModelService:
         self.id2label = {i: label for i, label in enumerate(self.label_list)}
 
     # ---------------------------------------------------------------------
-    # Confidence extraction from logits
+    # Model path resolution + optional download
+    # ---------------------------------------------------------------------
+    def _resolve_model_path(self) -> Path:
+        """
+        Accepts either:
+        - MODEL_PATH pointing directly to checkpoint dir
+        - MODEL_PATH pointing to model root dir (contains checkpoint-*)
+        """
+        env_path = os.getenv("MODEL_PATH") or settings.MODEL_PATH
+        p = Path(env_path).expanduser().resolve()
+
+        # If it's a root folder, try to find checkpoint inside
+        if p.exists() and p.is_dir():
+            # If it already looks like a checkpoint folder, use it
+            if (p / "config.json").exists() or p.name.startswith("checkpoint-"):
+                return p
+
+            # Otherwise find newest checkpoint-* under root
+            ckpts = sorted(p.glob("checkpoint-*"))
+            if ckpts:
+                return ckpts[-1]
+
+        return p  # may not exist yet
+
+    def _maybe_download_model(self, target_path: Path) -> Path:
+        """
+        If model isn't available locally, optionally download from HF.
+        Requires env vars:
+          HF_MODEL_REPO=your-org/your-model
+          (optional) HF_MODEL_REVISION=main
+          ALLOW_MODEL_DOWNLOAD=true
+        """
+        allow = os.getenv("ALLOW_MODEL_DOWNLOAD", "false").lower() in ("1", "true", "yes")
+        repo_id = os.getenv("HF_MODEL_REPO")
+        revision = os.getenv("HF_MODEL_REVISION")
+
+        if not allow or not repo_id:
+            return target_path
+
+        logger.info("Model not found at %s. Downloading from HF repo %s ...", target_path, repo_id)
+
+        # Download snapshot into a stable local dir
+        local_root = target_path.parent if target_path.suffix == "" else Path("/app/models")
+        local_root.mkdir(parents=True, exist_ok=True)
+
+        snapshot_download(
+            repo_id=repo_id,
+            revision=revision,
+            local_dir=str(local_root),
+            local_dir_use_symlinks=False,
+        )
+
+        # Re-resolve after download
+        resolved = self._resolve_model_path()
+        logger.info("Downloaded model resolved to %s", resolved)
+        return resolved
+
+    def load(self):
+        """
+        Lazy model load with a lock (safe for concurrent requests).
+        """
+        if self._loaded:
+            return
+
+        with _init_lock:
+            if self._loaded:
+                return
+
+            path = self._resolve_model_path()
+            if not path.exists():
+                path = self._maybe_download_model(path)
+
+            if not path.exists():
+                raise RuntimeError(
+                    f"Model path not found: {path}. "
+                    "Either bake the model into the container or set "
+                    "HF_MODEL_REPO + ALLOW_MODEL_DOWNLOAD=true."
+                )
+
+            self.model_path = path
+            self.device = torch.device(os.getenv("MODEL_DEVICE", "cpu"))
+
+            # Optional: cap threads for tiny cloud CPUs
+            try:
+                torch.set_num_threads(int(os.getenv("TORCH_NUM_THREADS", "1")))
+            except Exception:
+                pass
+
+            logger.info("Loading processor from %s on %s", self.model_path, self.device)
+
+            self.processor = AutoProcessor.from_pretrained(
+                str(self.model_path),
+                local_files_only=True,
+            )
+
+            # Ensure OCR is enabled
+            if hasattr(self.processor, "image_processor") and hasattr(
+                self.processor.image_processor, "apply_ocr"
+            ):
+                self.processor.image_processor.apply_ocr = True
+
+            logger.info("Loading model from %s on %s", self.model_path, self.device)
+
+            self.model = AutoModelForTokenClassification.from_pretrained(
+                str(self.model_path),
+                local_files_only=True,
+            ).to(self.device)
+
+            self.model.eval()
+            self._loaded = True
+            logger.info("Model loaded successfully.")
+
+    # ---------------------------------------------------------------------
+    # Confidence extraction
     # ---------------------------------------------------------------------
     def get_confidence_scores(self, logits: torch.Tensor, predictions, token_ids):
         scores = []
@@ -123,7 +177,6 @@ class KYCModelService:
             return None
 
         text_no_spaces = text.replace(" ", "")
-
         patterns = [
             r"\d{4}-\d{2}-\d{2}",
             r"\d{2}/\d{2}/\d{4}",
@@ -137,7 +190,6 @@ class KYCModelService:
                 continue
 
             candidate = match.group()
-
             for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
                 try:
                     return datetime.strptime(candidate, fmt).date()
@@ -191,7 +243,7 @@ class KYCModelService:
         return max(amounts) if amounts else None
 
     # ---------------------------------------------------------------------
-    # Auto currency detection
+    # Currency detection
     # ---------------------------------------------------------------------
     def detect_currency(self, raw_text: str):
         if any(x in raw_text for x in ["KES", "KSH", "KSh"]):
@@ -205,16 +257,10 @@ class KYCModelService:
         return "KES"
 
     # ---------------------------------------------------------------------
-    # Decode extracted fields from BIO labels
+    # Decode BIO predictions
     # ---------------------------------------------------------------------
     def decode_predictions(self, tokens, labels) -> Dict:
-        field_tokens = {
-            "company": [],
-            "date": [],
-            "address": [],
-            "total": [],
-        }
-
+        field_tokens = {"company": [], "date": [], "address": [], "total": []}
         current_field = None
         buffer = []
 
@@ -255,23 +301,14 @@ class KYCModelService:
         return fields
 
     # ---------------------------------------------------------------------
-    # Main prediction entrypoint
+    # Main prediction
     # ---------------------------------------------------------------------
     def predict(self, image_path: str) -> Dict:
-        # Guard for pdfs (since your backend allows pdf uploads)
-        _, ext = os.path.splitext(image_path.lower())
-        if ext == ".pdf":
-            raise ValueError(
-                "PDF receipts are not supported by the current ML pipeline. "
-                "Convert PDF to an image before inference, or add a PDF->image step."
-            )
+        self.load()  # lazy init here
 
-        try:
-            image = Image.open(image_path).convert("RGB")
-        except UnidentifiedImageError as e:
-            raise ValueError(f"Unsupported image format for {image_path}") from e
-
+        image = Image.open(image_path).convert("RGB")
         encoding = self.processor(images=image, return_tensors="pt")
+
         input_ids = encoding["input_ids"][0]
         token_ids = input_ids.tolist()
         tokens = self.processor.tokenizer.convert_ids_to_tokens(token_ids)
@@ -284,9 +321,7 @@ class KYCModelService:
             predictions = logits.argmax(-1).tolist()
 
         special_ids = set(self.processor.tokenizer.all_special_ids)
-        filtered_tokens = []
-        filtered_labels = []
-        filtered_token_ids = []
+        filtered_tokens, filtered_labels, filtered_token_ids = [], [], []
 
         for tok_id, tok, pred in zip(token_ids, tokens, predictions):
             if tok_id in special_ids:
@@ -303,11 +338,7 @@ class KYCModelService:
         raw_text = self.processor.tokenizer.convert_tokens_to_string(filtered_tokens)
 
         parsed_date = self.parse_date(extracted.get("date", "")) or self.parse_date(raw_text)
-        parsed_total = (
-            self.parse_amount(extracted.get("total", ""))
-            or self.parse_total_from_text(raw_text)
-        )
-
+        parsed_total = self.parse_amount(extracted.get("total", "")) or self.parse_total_from_text(raw_text)
         detected_currency = self.detect_currency(raw_text)
 
         return {
@@ -322,27 +353,14 @@ class KYCModelService:
             "raw_text": raw_text,
         }
 
+    # Backward compatible wrapper
     def run_inference(self, image_path: str) -> Dict:
         return self.predict(image_path)
 
 
-# ---------------------------------------------------------------------
-# Lazy singleton loader (safe for Render/Oracle cold starts)
-# ---------------------------------------------------------------------
-@lru_cache()
-def get_ml_service() -> KYCModelService:
-    return KYCModelService()
-
-
-# Backward-compatible lazy proxy:
-
-class _LazyServiceProxy:
-    def __getattr__(self, name):
-        return getattr(get_ml_service(), name)
-
-
-ml_service = _LazyServiceProxy()
+# Global lazy instance
+ml_service = KYCModelService()
 
 
 def predict_receipt(image_path: str) -> Dict:
-    return get_ml_service().predict(image_path)
+    return ml_service.predict(image_path)

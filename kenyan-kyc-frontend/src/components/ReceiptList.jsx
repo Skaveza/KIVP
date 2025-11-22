@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { getReceipts, deleteReceipt, getReceiptFile } from '../services/api';
 
+
 export default function ReceiptList({ refreshTrigger, onReceiptsChanged }) {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
