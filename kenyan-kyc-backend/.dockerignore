@@ -1,12 +1,35 @@
-venv
-__pycache__
+# Python virtualenv / caches
+venv/
+.venv/
+env/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
+.ipynb_checkpoints/
+
+# Environment / secrets
 .env
-.git
+.env.*
+*.env
+
+# Git / editor noise
+.git/
 .gitignore
-.idea
-.vscode
+.idea/
+.vscode/
 *.log
-uploads
+.DS_Store
+
+# Runtime uploads / local dbs
+uploads/
+**/uploads/
+*.sqlite3
+
+# ML models / checkpoints
+app/models/layoutlmv3_receipt_model/
+app/models/**/checkpoint-*/
+*.safetensors
+*.bin
+*.pt
+*.onnx
