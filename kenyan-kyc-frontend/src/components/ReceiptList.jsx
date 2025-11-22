@@ -1,7 +1,8 @@
+// src/components/ReceiptList.jsx
 import { useState, useEffect } from 'react';
-import { getReceipts, processReceipt, deleteReceipt } from '../services/api';
+import { getReceipts, deleteReceipt, getReceiptFile } from '../services/api';
 
-export default function ReceiptList({ refreshTrigger }) {
+export default function ReceiptList({ refreshTrigger, onReceiptsChanged }) {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,23 +21,40 @@ export default function ReceiptList({ refreshTrigger }) {
     fetchReceipts();
   }, [refreshTrigger]);
 
-  const handleProcess = async (id) => {
+  const handleView = async (id) => {
     try {
-      await processReceipt(id);
-      alert('Receipt processed!');
-      fetchReceipts();
+      const res = await getReceiptFile(id);
+  
+      const contentType =
+        res.headers?.['content-type'] || 'application/octet-stream';
+  
+      const blob = new Blob([res.data], { type: contentType });
+      const fileURL = URL.createObjectURL(blob);
+  
+      window.open(fileURL, '_blank', 'noopener,noreferrer');
+  
+      // cleanup to avoid memory leaks
+      setTimeout(() => URL.revokeObjectURL(fileURL), 60_000);
     } catch (error) {
-      alert('Processing failed: ' + (error.response?.data?.detail || error.message));
+      console.error('View failed:', error);
+      alert(
+        'View failed: ' +
+          (error.response?.data?.detail || error.message)
+      );
     }
   };
-
   const handleDelete = async (id) => {
-    if (!confirm('Delete this receipt?')) return;
+    if (!confirm('Delete this receipt? This may also update your KYC score.')) return;
     try {
       await deleteReceipt(id);
-      fetchReceipts();
+      await fetchReceipts();
+      // 🔔 Tell parent (Dashboard) to refresh stats + score
+      if (onReceiptsChanged) {
+        onReceiptsChanged();
+      }
     } catch (error) {
-      alert('Delete failed');
+      console.error('Delete failed:', error);
+      alert('Delete failed: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -45,10 +63,14 @@ export default function ReceiptList({ refreshTrigger }) {
       pending: 'bg-yellow-100 text-yellow-800',
       processing: 'bg-blue-100 text-blue-800',
       completed: 'bg-green-100 text-green-800',
-      failed: 'bg-red-100 text-red-800'
+      failed: 'bg-red-100 text-red-800',
     };
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status] || colors.pending}`}>
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+          colors[status] || colors.pending
+        }`}
+      >
         {status}
       </span>
     );
@@ -59,7 +81,7 @@ export default function ReceiptList({ refreshTrigger }) {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Receipts</h2>
-      
+
       {receipts.length === 0 ? (
         <p className="text-gray-500 text-center py-8">No receipts uploaded yet</p>
       ) : (
@@ -67,12 +89,24 @@ export default function ReceiptList({ refreshTrigger }) {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">File</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  File
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Company
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Amount
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Date
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -82,24 +116,29 @@ export default function ReceiptList({ refreshTrigger }) {
                   <td className="px-4 py-3">{getStatusBadge(receipt.status)}</td>
                   <td className="px-4 py-3 text-sm">{receipt.company_name || '-'}</td>
                   <td className="px-4 py-3 text-sm">
-                    {receipt.total_amount ? `KES ${receipt.total_amount}` : '-'}
+                    {receipt.total_amount != null
+                      ? `${receipt.currency || 'KES'} ${receipt.total_amount}`
+                      : '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm">{receipt.receipt_date || '-'}</td>
                   <td className="px-4 py-3 text-sm">
-                    {receipt.status === 'pending' && (
-                      <button
-                        onClick={() => handleProcess(receipt.id)}
-                        className="text-blue-600 hover:underline mr-2"
-                      >
-                        Process
-                      </button>
-                    )}
+                    {receipt.receipt_date
+                      ? new Date(receipt.receipt_date).toLocaleDateString()
+                      : '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm space-x-3">
+                    <button
+                      onClick={() => handleView(receipt.id)}
+                      className="text-kenya-green font-semibold hover:underline"
+                    >
+                      View
+                    </button>
                     <button
                       onClick={() => handleDelete(receipt.id)}
                       className="text-red-600 hover:underline"
                     >
                       Delete
                     </button>
+                    {/* No manual "Process" button since uploads auto-process */}
                   </td>
                 </tr>
               ))}

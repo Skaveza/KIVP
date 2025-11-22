@@ -1,6 +1,7 @@
+// src/services/api.js
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api/v1';
+export const API_URL = 'http://localhost:8000/api/v1';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -17,10 +18,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auth
 export const register = (data) => api.post('/auth/register', data);
 export const login = (data) => api.post('/auth/login', data);
 export const getCurrentUser = () => api.get('/auth/me');
 
+// Receipts
 export const uploadReceipt = (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -30,9 +33,15 @@ export const uploadReceipt = (file) => {
 };
 
 export const getReceipts = () => api.get('/receipts');
-export const processReceipt = (id) => api.post(`/receipts/${id}/process`);
-export const deleteReceipt = (id) => api.delete(`/receipts/${id}`);
 
+
+export const processReceipt = (id) => api.post(`/receipts/${id}/process`);
+
+export const deleteReceipt = (id) => api.delete(`/receipts/${id}`);
+export const getReceiptFile = (id) =>
+  api.get(`/receipts/${id}/file`, { responseType: 'blob' });
+
+// Verification / dashboard
 export const getScore = () => api.get('/verification/score');
 export const getScoreBreakdown = () => api.get('/verification/breakdown');
 export const getDashboard = () => api.get('/users/dashboard');
