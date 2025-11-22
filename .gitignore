@@ -38,3 +38,11 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+
+# ML models 
+kenyan-kyc-backend/app/models/layoutlmv3_receipt_model/
+kenyan-kyc-backend/app/models/**/checkpoint-*/
+*.safetensors
+*.bin
+*.pt
+*.onnx
