@@ -1,33 +1,36 @@
 FROM python:3.11-slim
 
-# Environment settings
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_PATH=/app/models/layoutlmv3_receipt_model/checkpoint-1000 \
-    MODEL_DEVICE=cpu
+    MODEL_DEVICE=cpu \
+    MODEL_URL=""
 
-# System deps (Tesseract + Postgres runtime libs)
-# NOTE: build-essential/libpq-dev are only needed if some pip packages compile from source.
-# If you use psycopg2-binary, you can drop build-essential + libpq-dev.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-osd \
+    curl \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python deps first
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the codebase
 COPY . .
 
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads /app/models/layoutlmv3_receipt_model
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Download model if missing, then start app
+CMD ["bash", "-lc", "\
+  if [ ! -f \"$MODEL_PATH/model.safetensors\" ]; then \
+    echo 'Model not found, downloading...'; \
+    python app/scripts/download_model.py; \
+  fi; \
+  uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+"]

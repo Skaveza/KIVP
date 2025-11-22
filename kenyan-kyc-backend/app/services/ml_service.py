@@ -1,29 +1,79 @@
 import re
-import os 
+import os
+import logging
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
+from functools import lru_cache
 
 import torch
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from transformers import AutoProcessor, AutoModelForTokenClassification
 
-from ..core.config import settings
+logger = logging.getLogger(__name__)
+
+
+def _resolve_default_model_path() -> str:
+    """
+    Pick a default path that works in both:
+    - local dev repo (./app/models/...)
+    - docker runtime (/app/models/...)
+    """
+    candidates = [
+        os.path.abspath("app/models/layoutlmv3_receipt_model/checkpoint-1000"),
+        "/app/models/layoutlmv3_receipt_model/checkpoint-1000",
+    ]
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    # fallback to first candidate even if missing (we'll error later with a clear msg)
+    return candidates[0]
 
 
 class KYCModelService:
     """
     Service for running LayoutLMv3-based KYC receipt extraction.
+    Lazily loaded via get_ml_service() to avoid startup crashes in Docker/Render.
     """
 
-    def __init__(self):
-        self.model_path = os.path.abspath(os.getenv("MODEL_PATH", "app/models/layoutlmv3_receipt_model/checkpoint-1000"))
-        self.device = torch.device(os.getenv("MODEL_DEVICE", "cpu"))
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        device: Optional[str] = None,
+        local_files_only: Optional[bool] = None,
+    ):
+        env_model_path = model_path or os.getenv("MODEL_PATH")
+        if env_model_path:
+            self.model_path = os.path.abspath(env_model_path)
+        else:
+            self.model_path = _resolve_default_model_path()
 
+        env_device = device or os.getenv("MODEL_DEVICE", "cpu")
+        self.device = torch.device(env_device)
+
+        # default True to preserve your current behavior
+        if local_files_only is None:
+            self.local_files_only = (
+                os.getenv("LOCAL_FILES_ONLY", "true").lower() == "true"
+            )
+        else:
+            self.local_files_only = bool(local_files_only)
+
+        self._load_model()
+
+    def _load_model(self):
+        if not os.path.isdir(self.model_path):
+            raise RuntimeError(
+                f"Model path not found: {self.model_path}. "
+                f"Make sure MODEL_PATH is set and the model is downloaded/mounted "
+                f"before running inference."
+            )
+
+        logger.info("Loading KYC model from %s on device %s", self.model_path, self.device)
 
         # Load processor (image processor + tokenizer)
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,
-            local_files_only=True,
+            local_files_only=self.local_files_only,
         )
 
         # Ensure OCR is enabled so features["words"] exists
@@ -35,7 +85,7 @@ class KYCModelService:
         # Load model
         self.model = AutoModelForTokenClassification.from_pretrained(
             self.model_path,
-            local_files_only=True,
+            local_files_only=self.local_files_only,
         ).to(self.device)
 
         self.model.eval()
@@ -54,13 +104,6 @@ class KYCModelService:
     # Confidence extraction from logits
     # ---------------------------------------------------------------------
     def get_confidence_scores(self, logits: torch.Tensor, predictions, token_ids):
-        """
-        Compute per-token confidence scores (excluding special tokens).
-
-        logits: (seq_len, num_labels)
-        predictions: list[int] length seq_len
-        token_ids: list[int] length seq_len
-        """
         scores = []
         softmax = torch.nn.functional.softmax(logits, dim=-1)
         special_ids = set(self.processor.tokenizer.all_special_ids)
@@ -73,27 +116,18 @@ class KYCModelService:
         return scores
 
     # ---------------------------------------------------------------------
-    # Date parsing with multiple formats + fallback
+    # Date parsing
     # ---------------------------------------------------------------------
     def parse_date(self, text: str):
-        """
-        Try to parse a date from the given text.
-        Supports formats like:
-        - 2015-11-27
-        - 27/11/2015
-        - 11/27/2015
-        - 27-11-2015
-        """
         if not text:
             return None
 
-        # Remove spaces to make "27 - 11 - 2015" -> "27-11-2015"
         text_no_spaces = text.replace(" ", "")
 
         patterns = [
-            r"\d{4}-\d{2}-\d{2}",  # 2015-11-27
-            r"\d{2}/\d{2}/\d{4}",  # 27/11/2015 or 11/27/2015
-            r"\d{2}-\d{2}-\d{4}",  # 27-11-2015
+            r"\d{4}-\d{2}-\d{2}",
+            r"\d{2}/\d{2}/\d{4}",
+            r"\d{2}-\d{2}-\d{4}",
             r"\d{1,2}/\d{1,2}/\d{2,4}",
         ]
 
@@ -104,7 +138,6 @@ class KYCModelService:
 
             candidate = match.group()
 
-            # Try several formats
             for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
                 try:
                     return datetime.strptime(candidate, fmt).date()
@@ -114,12 +147,9 @@ class KYCModelService:
         return None
 
     # ---------------------------------------------------------------------
-    # Amount parsing (for already-extracted field snippet)
+    # Amount parsing
     # ---------------------------------------------------------------------
     def parse_amount(self, value: str):
-        """
-        Extract a single numeric value from a short snippet (e.g. the 'total' field).
-        """
         if not value:
             return None
 
@@ -134,17 +164,7 @@ class KYCModelService:
         match = re.search(r"\d+(?:\.\d{1,2})?", value)
         return float(match.group()) if match else None
 
-    # ---------------------------------------------------------------------
-    # Heuristic: pick the most likely total from the entire receipt text
-    # ---------------------------------------------------------------------
     def parse_total_from_text(self, text: str):
-        """
-        Scan the full receipt text and pick a likely total amount.
-        Simple heuristic:
-        - Find all numeric values like 499.88, 85.00, etc.
-        - Filter out obviously huge numbers (likely IDs)
-        - Return the largest remaining value
-        """
         if not text:
             return None
 
@@ -155,7 +175,6 @@ class KYCModelService:
                 .replace(",", "")
         )
 
-        # Find ALL numbers like 499.88, 85.00, 15080615, etc.
         matches = re.findall(r"\d+(?:\.\d{1,2})?", cleaned)
         if not matches:
             return None
@@ -164,17 +183,12 @@ class KYCModelService:
         for m in matches:
             try:
                 value = float(m)
-                # simple sanity filter: ignore very large values (likely IDs)
                 if value < 10_000_000:
                     amounts.append(value)
             except ValueError:
                 continue
 
-        if not amounts:
-            return None
-
-        # Heuristic: pick the largest amount as total
-        return max(amounts)
+        return max(amounts) if amounts else None
 
     # ---------------------------------------------------------------------
     # Auto currency detection
@@ -188,17 +202,12 @@ class KYCModelService:
             return "EUR"
         if "£" in raw_text:
             return "GBP"
-        # default to Kenya
         return "KES"
 
     # ---------------------------------------------------------------------
     # Decode extracted fields from BIO labels
     # ---------------------------------------------------------------------
     def decode_predictions(self, tokens, labels) -> Dict:
-        """
-        Group subword tokens into fields using BIO labels, then detokenize
-        with the tokenizer to get readable text per field.
-        """
         field_tokens = {
             "company": [],
             "date": [],
@@ -229,19 +238,16 @@ class KYCModelService:
             elif prefix == "I" and current_field == fld:
                 buffer.append(tok)
             else:
-                # Inconsistent I- tag → treat as new field
                 flush()
                 current_field = fld
                 buffer = [tok]
 
         flush()
 
-        # Detokenize per field
         fields = {}
         for key, toks in field_tokens.items():
             if toks:
-                text = self.processor.tokenizer.convert_tokens_to_string(toks)
-                text = text.strip()
+                text = self.processor.tokenizer.convert_tokens_to_string(toks).strip()
             else:
                 text = ""
             fields[key] = text
@@ -252,28 +258,31 @@ class KYCModelService:
     # Main prediction entrypoint
     # ---------------------------------------------------------------------
     def predict(self, image_path: str) -> Dict:
-        """
-        Run OCR + LayoutLMv3 token classification on a receipt image and
-        return structured fields + raw debug info.
-        """
-        image = Image.open(image_path).convert("RGB")
+        # Guard for pdfs (since your backend allows pdf uploads)
+        _, ext = os.path.splitext(image_path.lower())
+        if ext == ".pdf":
+            raise ValueError(
+                "PDF receipts are not supported by the current ML pipeline. "
+                "Convert PDF to an image before inference, or add a PDF->image step."
+            )
 
-        # Processor does OCR + tokenization
+        try:
+            image = Image.open(image_path).convert("RGB")
+        except UnidentifiedImageError as e:
+            raise ValueError(f"Unsupported image format for {image_path}") from e
+
         encoding = self.processor(images=image, return_tensors="pt")
-        input_ids = encoding["input_ids"][0]  # (seq_len,)
+        input_ids = encoding["input_ids"][0]
         token_ids = input_ids.tolist()
         tokens = self.processor.tokenizer.convert_ids_to_tokens(token_ids)
 
-        # Move to device
         encoding = {k: v.to(self.device) for k, v in encoding.items()}
 
         with torch.no_grad():
             outputs = self.model(**encoding)
-            # logits: (1, seq_len, num_labels)
-            logits = outputs.logits[0]  # (seq_len, num_labels)
-            predictions = logits.argmax(-1).tolist()  # list[int] length seq_len
+            logits = outputs.logits[0]
+            predictions = logits.argmax(-1).tolist()
 
-        # Filter out special tokens, keep tokens + labels aligned
         special_ids = set(self.processor.tokenizer.all_special_ids)
         filtered_tokens = []
         filtered_labels = []
@@ -286,21 +295,14 @@ class KYCModelService:
             filtered_labels.append(self.id2label[pred])
             filtered_token_ids.append(tok_id)
 
-        # Decode fields from BIO labels
         extracted = self.decode_predictions(filtered_tokens, filtered_labels)
 
-        # Confidence across non-special tokens
         confidence_scores = self.get_confidence_scores(logits, predictions, token_ids)
         avg_conf = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
 
-        # Build clean raw text
         raw_text = self.processor.tokenizer.convert_tokens_to_string(filtered_tokens)
 
-        # Final post-processed values
-        # 1) Try to parse from the extracted field
-        # 2) If that fails, fall back to scanning full raw_text
         parsed_date = self.parse_date(extracted.get("date", "")) or self.parse_date(raw_text)
-
         parsed_total = (
             self.parse_amount(extracted.get("total", ""))
             or self.parse_total_from_text(raw_text)
@@ -320,23 +322,27 @@ class KYCModelService:
             "raw_text": raw_text,
         }
 
-    # ---------------------------------------------------------------------
-    # Compatibility wrapper used by routes/tests
-    # ---------------------------------------------------------------------
     def run_inference(self, image_path: str) -> Dict:
-        """
-        Wrapper so existing code that calls `ml_service.run_inference(...)`
-        keeps working.
-        """
         return self.predict(image_path)
 
 
-# Global instance used across the app
-ml_service = KYCModelService()
+# ---------------------------------------------------------------------
+# Lazy singleton loader (safe for Render/Oracle cold starts)
+# ---------------------------------------------------------------------
+@lru_cache()
+def get_ml_service() -> KYCModelService:
+    return KYCModelService()
+
+
+# Backward-compatible lazy proxy:
+
+class _LazyServiceProxy:
+    def __getattr__(self, name):
+        return getattr(get_ml_service(), name)
+
+
+ml_service = _LazyServiceProxy()
 
 
 def predict_receipt(image_path: str) -> Dict:
-    """
-    Optional function-level API for convenience.
-    """
-    return ml_service.predict(image_path)
+    return get_ml_service().predict(image_path)
