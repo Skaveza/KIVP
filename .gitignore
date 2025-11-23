@@ -39,10 +39,9 @@ Thumbs.db
 *.sqlite
 *.sqlite3
 
-# ML models 
-kenyan-kyc-backend/app/models/layoutlmv3_receipt_model/
-kenyan-kyc-backend/app/models/**/checkpoint-*/
-*.safetensors
+# HF model weights
+kenyan-kyc-backend/app/models/layoutlmv3_receipt_model/checkpoint-1000/
+**/*.safetensors
 *.bin
 *.pt
 *.onnx
