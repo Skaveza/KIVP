@@ -4,12 +4,12 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MODEL_PATH=/app/models/layoutlmv3_receipt_model/checkpoint-1000 \
-    MODEL_DEVICE=cpu
+    MODEL_DEVICE=cpu \
+    HF_HOME=/app/.cache/huggingface
 
-# System deps (Tesseract + Postgres runtime libs)
-# NOTE: build-essential/libpq-dev are only needed if some pip packages compile from source.
-# If you use psycopg2-binary, you can drop build-essential + libpq-dev.
+# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-osd \
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps first
+# Install Python deps
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -26,8 +26,15 @@ RUN pip install --upgrade pip && \
 # Copy the rest of the codebase
 COPY . .
 
-RUN mkdir -p /app/uploads
+# Download HF model at build time (repo is public)
+ARG HF_MODEL_REPO=sifakaveza/layoutlm3_receipt_model
+ARG HF_MODEL_SUBFOLDER=checkpoint-1000
+ENV HF_MODEL_REPO=$HF_MODEL_REPO
+ENV HF_MODEL_SUBFOLDER=$HF_MODEL_SUBFOLDER
+
+RUN python app/scripts/download_model.py && \
+    mkdir -p /app/uploads
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
