@@ -13,18 +13,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="Kenyan KYC Verification Platform",
-    version="1.0.0",
-    description="Receipt-based KYC verification",
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description=settings.DESCRIPTION,
     docs_url="/docs"
 )
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-    
+
+allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,23 +31,24 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info(" Starting application...")
+    logger.info("Starting application...")
     if check_db_connection():
-        logger.info(" Database connected")
+        logger.info("Database connected")
     else:
-        logger.error(" Database failed!")
+        logger.error("Database failed!")
 
 @app.get("/")
 def root():
     return {"status": "running", "docs": "/docs"}
 
 @app.get("/health")
-def health_check():
+def health():
     db_status = "connected" if check_db_connection() else "disconnected"
     return {"status": "healthy", "database": db_status}
 
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(users.router, prefix="/api/v1")
-app.include_router(receipts.router, prefix="/api/v1")
-app.include_router(verification.router, prefix="/api/v1")
-app.include_router(admin.router, prefix="/api/v1")
+# Routes
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(receipts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(verification.router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
