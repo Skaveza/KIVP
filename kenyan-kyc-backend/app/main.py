@@ -1,7 +1,4 @@
-"""
-Main FastAPI Application
-"""
-
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -13,13 +10,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    version=settings.VERSION,
-    description=settings.DESCRIPTION,
+    title="Kenyan KYC Verification Platform",
+    version="1.0.0",
+    description="Receipt-based KYC verification",
     docs_url="/docs"
 )
 
-allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+raw_origins = settings.ALLOWED_ORIGINS
+
+if isinstance(raw_origins, str):
+    allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+elif isinstance(raw_origins, (list, tuple, set)):
+    allowed_origins = list(raw_origins)
+else:
+    allowed_origins = []
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,13 +46,12 @@ def root():
     return {"status": "running", "docs": "/docs"}
 
 @app.get("/health")
-def health():
+def health_check():
     db_status = "connected" if check_db_connection() else "disconnected"
     return {"status": "healthy", "database": db_status}
 
-# Routes
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
-app.include_router(users.router, prefix=settings.API_V1_PREFIX)
-app.include_router(receipts.router, prefix=settings.API_V1_PREFIX)
-app.include_router(verification.router, prefix=settings.API_V1_PREFIX)
-app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(receipts.router, prefix="/api/v1")
+app.include_router(verification.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
