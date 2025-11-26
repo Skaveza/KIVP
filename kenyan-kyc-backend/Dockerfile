@@ -35,6 +35,9 @@ ENV HF_MODEL_SUBFOLDER=$HF_MODEL_SUBFOLDER
 RUN python app/scripts/download_model.py && \
     mkdir -p /app/uploads
 
-EXPOSE 8000
-
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+    COPY startup.sh .
+    RUN chmod +x startup.sh
+    
+    EXPOSE 8000
+    
+    CMD ["./startup.sh"]

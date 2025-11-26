@@ -216,3 +216,71 @@ def get_verification_requirements(current_user: User = Depends(get_current_user)
             "Minimum 5 receipts recommended, 10+ for best results",
         ],
     }
+
+
+# Add this to your verification.py
+@router.get("/debug/breakdown-no-auth")
+def get_score_breakdown_debug(
+    user_id: str,  # Pass user_id as query param
+    db: Session = Depends(get_db),
+):
+    """DEBUG ONLY - No auth required"""
+    score = (
+        db.query(VerificationScore)
+        .filter(VerificationScore.user_id == user_id)
+        .first()
+    )
+
+    if not score:
+        return {"error": "No score found for this user"}
+
+    scorer = KYCScorer(db)
+    trusted, dropped = scorer.partition_receipts_for_user(user_id)
+
+    return {
+        "final_score": float(score.final_score),
+        "receipts_used_count": len(trusted),
+        "receipts_dropped": [
+            {
+                "id": str(r.id),
+                "file_name": r.file_name,
+                "reason": reason,
+                "status": r.status,
+                "error_message": r.error_message,
+                "confidence": float(r.overall_confidence or 0.0),
+            }
+            for (r, reason) in dropped
+        ]
+    }
+
+@router.get("/debug/all-scores")
+def debug_all_scores(db: Session = Depends(get_db)):
+    """Show all users and their verification scores"""
+    from app.models.models import User, VerificationScore, Receipt
+    
+    users = db.query(User).all()
+    
+    result = []
+    for user in users:
+        score = db.query(VerificationScore).filter(
+            VerificationScore.user_id == user.id
+        ).first()
+        
+        receipts = db.query(Receipt).filter(
+            Receipt.user_id == user.id
+        ).all()
+        
+        result.append({
+            "user_id": str(user.id),
+            "email": user.email,
+            "has_score": score is not None,
+            "score_value": float(score.final_score) if score else None,
+            "total_receipts": len(receipts),
+            "failed_receipts": len([r for r in receipts if r.status == "failed"]),
+            "completed_receipts": len([r for r in receipts if r.status == "completed"]),
+        })
+    
+    return {
+        "total_users": len(users),
+        "users": result
+    }
