@@ -53,9 +53,9 @@ export default function Dashboard({ onLogout }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 ">
       {/* Header with Kenyan Flag Colors */}
-      <header className="bg-gradient-to-r from-kenya-green via-kenya-black to-kenya-red text-white shadow-lg">
+      <header className="bg-gradient-to-r from-kenya-green via-kenya-black to-kenya-red text-white shadow-lg fixed w-full z-[2]">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div>
@@ -80,7 +80,7 @@ export default function Dashboard({ onLogout }) {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 mt-20">
           <div className="bg-white rounded-lg shadow-lg p-6 border-l-4 border-kenya-green">
             <h3 className="text-gray-500 text-sm font-semibold">Total Receipts</h3>
             <p className="text-3xl font-bold text-gray-800">{stats.total || 0}</p>

@@ -18,7 +18,7 @@ export default function ScoreGauge({ score, status }) {
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative z-0">
       <div className="relative">
         <svg width="200" height="200" className="transform -rotate-90">
           <circle

@@ -49,7 +49,7 @@ export default function ReceiptList({ refreshTrigger, onReceiptsChanged }) {
     try {
       await deleteReceipt(id);
       await fetchReceipts();
-      // 🔔 Tell parent (Dashboard) to refresh stats + score
+      //  Tell parent (Dashboard) to refresh stats + score
       if (onReceiptsChanged) {
         onReceiptsChanged();
       }
@@ -80,8 +80,7 @@ export default function ReceiptList({ refreshTrigger, onReceiptsChanged }) {
   if (loading) return <div className="text-center py-8">Loading...</div>;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Receipts</h2>
+    <div className="bg-white rounded-lg  p-6">
 
       {receipts.length === 0 ? (
         <p className="text-gray-500 text-center py-8">No receipts uploaded yet</p>

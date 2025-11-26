@@ -1,7 +1,10 @@
 // src/services/api.js
 import axios from 'axios';
 
-export const API_URL =  import.meta.env.VITE_API_URL || 'https://uwezo.onrender.com/api/v1';
+// export const API_URL =  import.meta.env.VITE_API_URL || 'https://uwezo.onrender.com/api/v1';
+export const API_URL =  import.meta.env.VITE_API_URL || 'http://54.209.56.238:8001/api/v1';
+// export const API_URL =  import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+
 
 const api = axios.create({
   baseURL: API_URL,
