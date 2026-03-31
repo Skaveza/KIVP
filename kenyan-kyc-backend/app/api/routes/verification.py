@@ -183,10 +183,11 @@ def get_score_breakdown(
         "metrics": {
             "total_receipts": score.total_receipts,
             "total_spending": float(score.total_spending),
+            "total_spending": float(score.total_spending or 0),
             "unique_companies": score.unique_companies,
             "unique_locations": score.unique_locations,
             "date_range_days": score.date_range_days,
-            "average_transaction_amount": float(score.average_transaction_amount),
+            "average_transaction_amount": float(score.average_transaction_amount or 0),
         },
         "receipts_used": receipts_used,
         "receipts_dropped": receipts_dropped,
