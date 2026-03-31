@@ -36,11 +36,16 @@ def update_profile(
     if updates.national_id is not None:
         current_user.national_id = updates.national_id
     
-    db.commit()
-    db.refresh(current_user)
-    
-    return current_user
-
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status code=500,
+            detail="Failed to update profile"
+        )
+    return current user
 
 @router.get("/dashboard", response_model=UserDashboard)
 def get_dashboard(
