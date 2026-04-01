@@ -42,7 +42,7 @@ def update_profile(
     except Exception:
         db.rollback()
         raise HTTPException(
-            status code=500,
+            status_code=500,
             detail="Failed to update profile"
         )
     return current user
