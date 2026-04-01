@@ -45,7 +45,7 @@ def update_profile(
             status_code=500,
             detail="Failed to update profile"
         )
-    return current user
+    return current_user
 
 @router.get("/dashboard", response_model=UserDashboard)
 def get_dashboard(
