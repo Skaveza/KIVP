@@ -1,5 +1,7 @@
 # Uwezo KYC: Receipt-Based Identity Verification
 
+![Uwezo KYC homepage](docs/home.png)
+
 A research prototype testing whether receipts can serve as alternative evidence for KYC (know-your-customer) checks in Kenya, for people without formal credit histories. Built as a capstone project at African Leadership University.
 
 **Live site:** https://uwezo-pujl.onrender.com · **API docs:** https://uwezo.onrender.com/docs
